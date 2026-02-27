@@ -93,6 +93,12 @@ or moved up and down in the list by dragging them.
 Both the trigonometric unit and the result display format are stored with the expression in the list of
 recent expressions and restored to the entry field when the expression is copied.
 
+### Theming
+
+The app supports light and dark themes. By default, the theme follows the operating system's current
+setting. A toggle button allows the user to override this and select light or dark mode explicitly.
+The preference is persisted between app starts.
+
 ## Architecture
 
 The app uses clean architecture implemented using Blocs and/or Cubits for the business logic
