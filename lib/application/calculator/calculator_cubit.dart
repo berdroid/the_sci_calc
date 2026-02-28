@@ -36,39 +36,21 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     switch (node) {
       case PlaceholderNode(:final id):
         final newNode = ExpressionNode.number(id: id, raw: digit);
-        final newRoot = _replaceNode(state.expressionRoot, id, newNode);
-        emit(state.copyWith(
-          expressionRoot: newRoot,
-          lastResult: null,
-          showingResult: false,
-        ));
+        _emitReplaced(id, newNode, id);
 
       case NumberNode(:final id, :final raw):
         if (digit == '.' && raw.contains('.')) return;
         final newRaw = raw == '0' && digit != '.' ? digit : raw + digit;
-        final newNode = ExpressionNode.number(id: id, raw: newRaw);
-        final newRoot = _replaceNode(state.expressionRoot, id, newNode);
-        emit(state.copyWith(
-          expressionRoot: newRoot,
-          lastResult: null,
-          showingResult: false,
-        ));
+        _emitReplaced(id, ExpressionNode.number(id: id, raw: newRaw), id);
 
       default:
         final placeholder = _firstPlaceholder(node);
         if (placeholder != null) {
-          final newNode = ExpressionNode.number(
-            id: placeholder.id,
-            raw: digit,
+          _emitReplaced(
+            placeholder.id,
+            ExpressionNode.number(id: placeholder.id, raw: digit),
+            placeholder.id,
           );
-          final newRoot =
-              _replaceNode(state.expressionRoot, placeholder.id, newNode);
-          emit(state.copyWith(
-            expressionRoot: newRoot,
-            cursor: CursorPosition(focusedNodeId: placeholder.id),
-            lastResult: null,
-            showingResult: false,
-          ));
         }
     }
   }
@@ -76,33 +58,38 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   void appendDecimalPoint() => appendDigit('.');
 
   // ── Binary operations ─────────────────────────────────────────────────────────
+  //
+  // Binary operators are inserted *within the current scope*. The scope root is
+  // the largest sub-expression that is still inside the nearest containing
+  // structural slot (trig argument, root radicand, fraction slot, etc.).
+  // BinaryOpNodes are transparent to scope — only structural nodes create
+  // scope boundaries. The scope root becomes the left operand of the new op.
 
   void insertBinaryOp(OperatorType op) {
     final rightId = _newId();
-    final newBinaryOp = ExpressionNode.binaryOp(
-      id: _newId(),
-      op: op,
-      left: state.expressionRoot,
-      right: ExpressionNode.placeholder(id: rightId),
+    _insertWrappingScope(
+      (scope) => ExpressionNode.binaryOp(
+        id: _newId(),
+        op: op,
+        left: scope,
+        right: ExpressionNode.placeholder(id: rightId),
+      ),
+      rightId,
     );
-    emit(state.copyWith(
-      expressionRoot: newBinaryOp,
-      cursor: CursorPosition(focusedNodeId: rightId),
-      lastResult: null,
-      showingResult: false,
-    ));
   }
 
   // ── Structured nodes ──────────────────────────────────────────────────────────
 
   void insertFraction() {
     final denominatorId = _newId();
-    final newNode = ExpressionNode.fraction(
-      id: _newId(),
-      numerator: _focusedOrRoot(),
-      denominator: ExpressionNode.placeholder(id: denominatorId),
+    _insertWrappingScope(
+      (scope) => ExpressionNode.fraction(
+        id: _newId(),
+        numerator: scope,
+        denominator: ExpressionNode.placeholder(id: denominatorId),
+      ),
+      denominatorId,
     );
-    _replaceRootWith(newNode, denominatorId);
   }
 
   void insertSquareRoot() {
@@ -127,31 +114,38 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void insertPower() {
     final exponentId = _newId();
-    final newNode = ExpressionNode.power(
-      id: _newId(),
-      base: _focusedOrRoot(),
-      exponent: ExpressionNode.placeholder(id: exponentId),
+    _insertWrappingScope(
+      (scope) => ExpressionNode.power(
+        id: _newId(),
+        base: scope,
+        exponent: ExpressionNode.placeholder(id: exponentId),
+      ),
+      exponentId,
     );
-    _replaceRootWith(newNode, exponentId);
   }
 
   void insertSquare() {
-    final newNode = ExpressionNode.power(
-      id: _newId(),
-      base: _focusedOrRoot(),
-      exponent: ExpressionNode.number(id: _newId(), raw: '2'),
+    final focusId = state.cursor.focusedNodeId;
+    _insertWrappingScope(
+      (scope) => ExpressionNode.power(
+        id: _newId(),
+        base: scope,
+        exponent: ExpressionNode.number(id: _newId(), raw: '2'),
+      ),
+      focusId, // cursor stays on the same leaf (now inside the base)
     );
-    final newId = newNode.id;
-    _replaceRootWith(newNode, newId);
   }
 
   void insertReciprocal() {
-    final newNode = ExpressionNode.fraction(
-      id: _newId(),
-      numerator: ExpressionNode.number(id: _newId(), raw: '1'),
-      denominator: _focusedOrRoot(),
+    final focusId = state.cursor.focusedNodeId;
+    _insertWrappingScope(
+      (scope) => ExpressionNode.fraction(
+        id: _newId(),
+        numerator: ExpressionNode.number(id: _newId(), raw: '1'),
+        denominator: scope,
+      ),
+      focusId,
     );
-    _replaceRootWith(newNode, newNode.id);
   }
 
   void insertTrigFunction(TrigFunctionType func) {
@@ -175,40 +169,44 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   }
 
   void insertAbsoluteValue() {
-    final newNode = ExpressionNode.unaryOp(
-      id: _newId(),
-      op: UnaryOperatorType.absoluteValue,
-      operand: _focusedOrRoot(),
+    final focusId = state.cursor.focusedNodeId;
+    _insertWrappingScope(
+      (scope) => ExpressionNode.unaryOp(
+        id: _newId(),
+        op: UnaryOperatorType.absoluteValue,
+        operand: scope,
+      ),
+      focusId,
     );
-    _replaceRootWith(newNode, newNode.id);
   }
 
   void insertNegate() {
-    final newNode = ExpressionNode.unaryOp(
-      id: _newId(),
-      op: UnaryOperatorType.negate,
-      operand: _focusedOrRoot(),
+    final focusId = state.cursor.focusedNodeId;
+    _insertWrappingScope(
+      (scope) => ExpressionNode.unaryOp(
+        id: _newId(),
+        op: UnaryOperatorType.negate,
+        operand: scope,
+      ),
+      focusId,
     );
-    _replaceRootWith(newNode, newNode.id);
   }
 
   void insertParentheses() {
-    final newNode = ExpressionNode.parenthesized(
-      id: _newId(),
-      inner: _focusedOrRoot(),
+    final focusId = state.cursor.focusedNodeId;
+    _insertWrappingScope(
+      (scope) => ExpressionNode.parenthesized(
+        id: _newId(),
+        inner: scope,
+      ),
+      focusId,
     );
-    _replaceRootWith(newNode, newNode.id);
   }
 
   void insertConstant(ConstantType constant) {
     final focusId = state.cursor.focusedNodeId;
     final newNode = ExpressionNode.constant(id: focusId, constant: constant);
-    final newRoot = _replaceNode(state.expressionRoot, focusId, newNode);
-    emit(state.copyWith(
-      expressionRoot: newRoot,
-      lastResult: null,
-      showingResult: false,
-    ));
+    _emitReplaced(focusId, newNode, focusId);
   }
 
   // ── Delete / clear ────────────────────────────────────────────────────────────
@@ -221,48 +219,33 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     switch (node) {
       case NumberNode(:final id, :final raw):
         if (raw.length > 1) {
-          final newNode = ExpressionNode.number(
-            id: id,
-            raw: raw.substring(0, raw.length - 1),
+          _emitReplaced(
+            id,
+            ExpressionNode.number(id: id, raw: raw.substring(0, raw.length - 1)),
+            id,
           );
-          emit(state.copyWith(
-            expressionRoot: _replaceNode(state.expressionRoot, id, newNode),
-            lastResult: null,
-            showingResult: false,
-          ));
         } else {
-          final placeholder = ExpressionNode.placeholder(id: id);
-          emit(state.copyWith(
-            expressionRoot: _replaceNode(state.expressionRoot, id, placeholder),
-            lastResult: null,
-            showingResult: false,
-          ));
+          _emitReplaced(id, ExpressionNode.placeholder(id: id), id);
         }
 
       case PlaceholderNode():
         final parent = _findParent(state.expressionRoot, focusId);
         if (parent != null) {
           final newId = _newId();
-          final placeholder = ExpressionNode.placeholder(id: newId);
-          emit(state.copyWith(
-            expressionRoot:
-                _replaceNode(state.expressionRoot, parent.id, placeholder),
-            cursor: CursorPosition(focusedNodeId: newId),
-            lastResult: null,
-            showingResult: false,
-          ));
+          _emitReplaced(
+            parent.id,
+            ExpressionNode.placeholder(id: newId),
+            newId,
+          );
         }
 
       default:
         final newId = _newId();
-        final placeholder = ExpressionNode.placeholder(id: newId);
-        emit(state.copyWith(
-          expressionRoot:
-              _replaceNode(state.expressionRoot, focusId, placeholder),
-          cursor: CursorPosition(focusedNodeId: newId),
-          lastResult: null,
-          showingResult: false,
-        ));
+        _emitReplaced(
+          focusId,
+          ExpressionNode.placeholder(id: newId),
+          newId,
+        );
     }
   }
 
@@ -285,8 +268,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void moveCursorLeft() {
     final leaves = _allLeaves(state.expressionRoot);
-    final idx =
-        leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
+    final idx = leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
     if (idx > 0) {
       emit(state.copyWith(
         cursor: CursorPosition(focusedNodeId: leaves[idx - 1].id),
@@ -296,8 +278,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void moveCursorRight() {
     final leaves = _allLeaves(state.expressionRoot);
-    final idx =
-        leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
+    final idx = leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
     if (idx >= 0 && idx < leaves.length - 1) {
       emit(state.copyWith(
         cursor: CursorPosition(focusedNodeId: leaves[idx + 1].id),
@@ -312,25 +293,16 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   // ── Evaluate ──────────────────────────────────────────────────────────────────
 
   void evaluate() {
-    final result = _evaluator.evaluate(
-      state.expressionRoot,
-      state.angleUnit,
-    );
-    emit(state.copyWith(
-      lastResult: result,
-      showingResult: true,
-    ));
+    final result = _evaluator.evaluate(state.expressionRoot, state.angleUnit);
+    emit(state.copyWith(lastResult: result, showingResult: true));
   }
 
   // ── Settings sync ─────────────────────────────────────────────────────────────
 
-  void setAngleUnit(AngleUnit unit) {
-    emit(state.copyWith(angleUnit: unit));
-  }
+  void setAngleUnit(AngleUnit unit) => emit(state.copyWith(angleUnit: unit));
 
-  void setDisplayFormat(DisplayFormat fmt) {
-    emit(state.copyWith(displayFormat: fmt));
-  }
+  void setDisplayFormat(DisplayFormat fmt) =>
+      emit(state.copyWith(displayFormat: fmt));
 
   void loadExpression(ExpressionNode root) {
     final leaves = _allLeaves(root);
@@ -343,17 +315,61 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     ));
   }
 
-  // ── Private helpers ───────────────────────────────────────────────────────────
+  // ── Scope helpers ─────────────────────────────────────────────────────────────
 
-  /// Returns the focused leaf node, or the whole expression root if focus is
-  /// on a non-leaf or the focused node is the root.
-  ExpressionNode _focusedOrRoot() {
-    final focusId = state.cursor.focusedNodeId;
-    return _findNode(state.expressionRoot, focusId) ?? state.expressionRoot;
+  /// Returns the path of nodes from [root] down to the node with [targetId],
+  /// inclusive. Returns null if [targetId] is not found.
+  List<ExpressionNode>? _pathToNode(ExpressionNode root, NodeId targetId) {
+    if (root.id == targetId) return [root];
+    for (final child in _directChildren(root)) {
+      final sub = _pathToNode(child, targetId);
+      if (sub != null) return [root, ...sub];
+    }
+    return null;
   }
 
-  /// Insert [newNode] in place of the currently-focused placeholder.
-  /// If focus is not on a placeholder, replace the root.
+  /// The **scope root** is the largest sub-expression that can be edited
+  /// without leaving the current structural slot.
+  ///
+  /// Walking upward from the focused node: [BinaryOpNode]s are transparent
+  /// (they are part of the expression being built inside the slot). Any other
+  /// structural node (Trig, Log, Root, Fraction, Power, Paren, Unary) is a
+  /// scope boundary; the child of that node that contains the focus becomes
+  /// the scope root.
+  ExpressionNode _findScopeRoot(ExpressionNode globalRoot, NodeId focusId) {
+    final path = _pathToNode(globalRoot, focusId);
+    if (path == null) return globalRoot;
+    for (int i = path.length - 1; i >= 1; i--) {
+      if (path[i - 1] is! BinaryOpNode) {
+        return path[i]; // first non-BinaryOp boundary found — child is scope root
+      }
+    }
+    return globalRoot; // only BinaryOpNodes above — scope is global root
+  }
+
+  /// Wraps the current scope root with a node built by [builder], then moves
+  /// the cursor to [cursorId]. The scope root is replaced in-place within the
+  /// global tree.
+  void _insertWrappingScope(
+    ExpressionNode Function(ExpressionNode scopeRoot) builder,
+    NodeId cursorId,
+  ) {
+    final scopeRoot = _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
+    final newNode = builder(scopeRoot);
+    final newRoot = scopeRoot.id == state.expressionRoot.id
+        ? newNode
+        : _replaceNode(state.expressionRoot, scopeRoot.id, newNode);
+    emit(state.copyWith(
+      expressionRoot: newRoot,
+      cursor: CursorPosition(focusedNodeId: cursorId),
+      lastResult: null,
+      showingResult: false,
+    ));
+  }
+
+  /// Inserts [newNode] in place of the currently-focused [PlaceholderNode].
+  /// If the focused node is not a placeholder, inserts at the global root
+  /// (fallback for function keys pressed outside of a placeholder).
   void _insertAtFocusedPlaceholder(ExpressionNode newNode, NodeId cursorId) {
     final focusId = state.cursor.focusedNodeId;
     final focused = _findNode(state.expressionRoot, focusId);
@@ -368,17 +384,20 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     ));
   }
 
-  /// Replace the root with [newNode] and move cursor to [cursorId].
-  void _replaceRootWith(ExpressionNode newNode, NodeId cursorId) {
+  /// Replaces the node with [targetId] in the global tree and emits a new
+  /// state with the cursor at [cursorId].
+  void _emitReplaced(NodeId targetId, ExpressionNode replacement, NodeId cursorId) {
+    final newRoot = _replaceNode(state.expressionRoot, targetId, replacement);
     emit(state.copyWith(
-      expressionRoot: newNode,
+      expressionRoot: newRoot,
       cursor: CursorPosition(focusedNodeId: cursorId),
       lastResult: null,
       showingResult: false,
     ));
   }
 
-  /// Find a node by ID in the tree.
+  // ── Tree utilities ────────────────────────────────────────────────────────────
+
   ExpressionNode? _findNode(ExpressionNode root, NodeId targetId) {
     if (root.id == targetId) return root;
     return switch (root) {
@@ -401,7 +420,6 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     };
   }
 
-  /// Replace a node by ID throughout the tree.
   ExpressionNode _replaceNode(
     ExpressionNode root,
     NodeId targetId,
@@ -433,9 +451,8 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         ExpressionNode.root(
           id: id,
           radicand: _replaceNode(radicand, targetId, replacement),
-          index: index != null
-              ? _replaceNode(index, targetId, replacement)
-              : null,
+          index:
+              index != null ? _replaceNode(index, targetId, replacement) : null,
         ),
       PowerNode(:final id, :final base, :final exponent) =>
         ExpressionNode.power(
@@ -454,9 +471,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
           id: id,
           logType: logType,
           argument: _replaceNode(argument, targetId, replacement),
-          base: base != null
-              ? _replaceNode(base, targetId, replacement)
-              : null,
+          base: base != null ? _replaceNode(base, targetId, replacement) : null,
         ),
       ParenthesizedNode(:final id, :final inner) =>
         ExpressionNode.parenthesized(
@@ -466,29 +481,25 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     };
   }
 
-  /// Find the direct parent of the node with [childId].
   ExpressionNode? _findParent(ExpressionNode root, NodeId childId) {
-    bool isDirectChild(ExpressionNode parent) {
-      return switch (parent) {
-        BinaryOpNode(:final left, :final right) =>
-          left.id == childId || right.id == childId,
-        UnaryOpNode(:final operand) => operand.id == childId,
-        FractionNode(:final numerator, :final denominator) =>
-          numerator.id == childId || denominator.id == childId,
-        RootNode(:final radicand, :final index) =>
-          radicand.id == childId || index?.id == childId,
-        PowerNode(:final base, :final exponent) =>
-          base.id == childId || exponent.id == childId,
-        TrigFunctionNode(:final argument) => argument.id == childId,
-        LogFunctionNode(:final argument, :final base) =>
-          argument.id == childId || base?.id == childId,
-        ParenthesizedNode(:final inner) => inner.id == childId,
-        _ => false,
-      };
-    }
+    bool isDirectChild(ExpressionNode parent) => switch (parent) {
+          BinaryOpNode(:final left, :final right) =>
+            left.id == childId || right.id == childId,
+          UnaryOpNode(:final operand) => operand.id == childId,
+          FractionNode(:final numerator, :final denominator) =>
+            numerator.id == childId || denominator.id == childId,
+          RootNode(:final radicand, :final index) =>
+            radicand.id == childId || index?.id == childId,
+          PowerNode(:final base, :final exponent) =>
+            base.id == childId || exponent.id == childId,
+          TrigFunctionNode(:final argument) => argument.id == childId,
+          LogFunctionNode(:final argument, :final base) =>
+            argument.id == childId || base?.id == childId,
+          ParenthesizedNode(:final inner) => inner.id == childId,
+          _ => false,
+        };
 
     if (isDirectChild(root)) return root;
-
     for (final child in _directChildren(root)) {
       final found = _findParent(child, childId);
       if (found != null) return found;
@@ -513,35 +524,32 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         _ => <ExpressionNode>[],
       };
 
-  /// All leaf nodes (NumberNode, PlaceholderNode, ConstantNode) in order.
-  List<ExpressionNode> _allLeaves(ExpressionNode root) {
-    return switch (root) {
-      PlaceholderNode() || NumberNode() || ConstantNode() => [root],
-      BinaryOpNode(:final left, :final right) => [
-          ..._allLeaves(left),
-          ..._allLeaves(right),
-        ],
-      UnaryOpNode(:final operand) => _allLeaves(operand),
-      FractionNode(:final numerator, :final denominator) => [
-          ..._allLeaves(numerator),
-          ..._allLeaves(denominator),
-        ],
-      RootNode(:final radicand, :final index) => [
-          ...(index != null ? _allLeaves(index) : <ExpressionNode>[]),
-          ..._allLeaves(radicand),
-        ],
-      PowerNode(:final base, :final exponent) => [
-          ..._allLeaves(base),
-          ..._allLeaves(exponent),
-        ],
-      TrigFunctionNode(:final argument) => _allLeaves(argument),
-      LogFunctionNode(:final argument, :final base) => [
-          ...(base != null ? _allLeaves(base) : <ExpressionNode>[]),
-          ..._allLeaves(argument),
-        ],
-      ParenthesizedNode(:final inner) => _allLeaves(inner),
-    };
-  }
+  List<ExpressionNode> _allLeaves(ExpressionNode root) => switch (root) {
+        PlaceholderNode() || NumberNode() || ConstantNode() => [root],
+        BinaryOpNode(:final left, :final right) => [
+            ..._allLeaves(left),
+            ..._allLeaves(right),
+          ],
+        UnaryOpNode(:final operand) => _allLeaves(operand),
+        FractionNode(:final numerator, :final denominator) => [
+            ..._allLeaves(numerator),
+            ..._allLeaves(denominator),
+          ],
+        RootNode(:final radicand, :final index) => [
+            ...(index != null ? _allLeaves(index) : <ExpressionNode>[]),
+            ..._allLeaves(radicand),
+          ],
+        PowerNode(:final base, :final exponent) => [
+            ..._allLeaves(base),
+            ..._allLeaves(exponent),
+          ],
+        TrigFunctionNode(:final argument) => _allLeaves(argument),
+        LogFunctionNode(:final argument, :final base) => [
+            ...(base != null ? _allLeaves(base) : <ExpressionNode>[]),
+            ..._allLeaves(argument),
+          ],
+        ParenthesizedNode(:final inner) => _allLeaves(inner),
+      };
 
   PlaceholderNode? _firstPlaceholder(ExpressionNode node) {
     if (node is PlaceholderNode) return node;

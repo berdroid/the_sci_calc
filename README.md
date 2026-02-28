@@ -22,11 +22,17 @@ will evaluate the expression and display the result. If there are input errors, 
 or incomplete elements, these
 will be highlighted and explained with brief error messages at the foot of the display section.
 
-Expressions will be displayed in structured style, similar to writing on paper. Values to be 
-entered will be shown as lightly shaded boxes until filled in. This works for all operators, such as square root, 
+Expressions will be displayed in structured style, similar to writing on paper. Values to be
+entered will be shown as lightly shaded boxes until filled in. This works for all operators, such as square root,
 quotient, exponentiation, trigonometric functions, etc.
 
-Navigation between operator arguments is possible by tapping/clicking the field. On platforms with 
+Each shaded box is a **slot** that can hold a complete sub-expression. While the cursor is inside
+a slot, digits, operators, functions, constants, and parentheses all build up the expression
+*within that slot*. For example, typing `3`, `+`, `4` inside the radicand slot of a square-root
+produces `√(3 + 4)`, not `√3 + 4`. Pressing the left or right arrow key moves the cursor out of
+the current slot and into the surrounding expression.
+
+Navigation between operator arguments is possible by tapping/clicking the field. On platforms with
 hardware keyboard, using the arrow and tab keys also navigates within or between operator arguments.
 
 Long-pressing a field will select its contents, e.g. the argument of a root. Repeatedly long-pressing
