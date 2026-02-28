@@ -86,7 +86,9 @@ In landscape mode, or in a desktop window, the app will also display a scrollabl
 expressions and results on the left. 
 Double-tapping an entry will copy the expression to the display section for editing.
 
-The list of recent entries holds at most 20 entries and persists between app starts.
+Each time the = button is pressed and a result is successfully computed, the expression
+together with its result is prepended to the list. An expression that produces an error is
+not recorded. The list of recent entries holds at most 20 entries and persists between app starts.
 Entries in the list may be selected by long press, and then may be deleted with the DEL button, 
 or moved up and down in the list by dragging them.
 

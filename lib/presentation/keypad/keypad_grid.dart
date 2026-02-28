@@ -8,10 +8,28 @@ import 'calculator_button.dart';
 class KeypadGrid extends StatelessWidget {
   const KeypadGrid({super.key});
 
+  // All rows have 4 flex units total (verified in button_definitions.dart).
+  static const _flexUnitsPerRow = 4;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: keypadGrid.map((row) => _buildRow(context, row)).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Each button's height = total height / number of rows.
+        final buttonHeight = constraints.maxHeight / keypadGrid.length;
+        // Limit width so no button exceeds 2× its height.
+        final maxWidth = buttonHeight * 2 * _flexUnitsPerRow;
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              children:
+                  keypadGrid.map((row) => _buildRow(context, row)).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 
