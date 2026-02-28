@@ -267,21 +267,21 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   // ── Cursor navigation ─────────────────────────────────────────────────────────
 
   void moveCursorLeft() {
-    final leaves = _allLeaves(state.expressionRoot);
-    final idx = leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
+    final nodes = _allNavigableNodes(state.expressionRoot);
+    final idx = nodes.indexWhere((n) => n.id == state.cursor.focusedNodeId);
     if (idx > 0) {
       emit(state.copyWith(
-        cursor: CursorPosition(focusedNodeId: leaves[idx - 1].id),
+        cursor: CursorPosition(focusedNodeId: nodes[idx - 1].id),
       ));
     }
   }
 
   void moveCursorRight() {
-    final leaves = _allLeaves(state.expressionRoot);
-    final idx = leaves.indexWhere((n) => n.id == state.cursor.focusedNodeId);
-    if (idx >= 0 && idx < leaves.length - 1) {
+    final nodes = _allNavigableNodes(state.expressionRoot);
+    final idx = nodes.indexWhere((n) => n.id == state.cursor.focusedNodeId);
+    if (idx >= 0 && idx < nodes.length - 1) {
       emit(state.copyWith(
-        cursor: CursorPosition(focusedNodeId: leaves[idx + 1].id),
+        cursor: CursorPosition(focusedNodeId: nodes[idx + 1].id),
       ));
     }
   }
@@ -522,6 +522,60 @@ class CalculatorCubit extends Cubit<CalculatorState> {
           base != null ? [argument, base] : [argument],
         ParenthesizedNode(:final inner) => [inner],
         _ => <ExpressionNode>[],
+      };
+
+  /// All nodes in left-to-right reading order that can receive cursor focus.
+  ///
+  /// Leaf nodes (Placeholder, Number, Constant) are included as-is.
+  /// BinaryOpNodes are transparent — only their children appear in the list.
+  /// Every other structural node (Root, Power, Fraction, Trig, Log, Unary,
+  /// Paren) appears **after** all of its children, representing the "exit"
+  /// cursor position just to the right of the rendered node. This lets the
+  /// user press → to step out of a slot and then type an operator that wraps
+  /// the structural node in a larger expression.
+  List<ExpressionNode> _allNavigableNodes(ExpressionNode root) =>
+      switch (root) {
+        PlaceholderNode() || NumberNode() || ConstantNode() => [root],
+        BinaryOpNode(:final left, :final right) => [
+            ..._allNavigableNodes(left),
+            ..._allNavigableNodes(right),
+          ],
+        UnaryOpNode(:final operand) => [
+            ..._allNavigableNodes(operand),
+            root,
+          ],
+        FractionNode(:final numerator, :final denominator) => [
+            ..._allNavigableNodes(numerator),
+            ..._allNavigableNodes(denominator),
+            root,
+          ],
+        RootNode(:final radicand, :final index) => [
+            ...(index != null
+                ? _allNavigableNodes(index)
+                : <ExpressionNode>[]),
+            ..._allNavigableNodes(radicand),
+            root,
+          ],
+        PowerNode(:final base, :final exponent) => [
+            ..._allNavigableNodes(base),
+            ..._allNavigableNodes(exponent),
+            root,
+          ],
+        TrigFunctionNode(:final argument) => [
+            ..._allNavigableNodes(argument),
+            root,
+          ],
+        LogFunctionNode(:final argument, :final base) => [
+            ...(base != null
+                ? _allNavigableNodes(base)
+                : <ExpressionNode>[]),
+            ..._allNavigableNodes(argument),
+            root,
+          ],
+        ParenthesizedNode(:final inner) => [
+            ..._allNavigableNodes(inner),
+            root,
+          ],
       };
 
   List<ExpressionNode> _allLeaves(ExpressionNode root) => switch (root) {
