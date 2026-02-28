@@ -26,13 +26,14 @@ class ExpressionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Toggle bar
-          Padding(
+          // Toggle bar — scrollable so it never overflows on narrow widths.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               children: [
                 const AngleUnitToggle(),
-                const Spacer(),
+                const SizedBox(width: 16),
                 const DisplayFormatToggle(),
               ],
             ),
