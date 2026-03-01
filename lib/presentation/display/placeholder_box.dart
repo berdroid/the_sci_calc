@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/expression_node.dart';
+import 'cursor_caret.dart';
 
 class PlaceholderBox extends StatelessWidget {
   const PlaceholderBox({
@@ -42,13 +43,7 @@ class PlaceholderBox extends StatelessWidget {
         ),
         child: isFocused
             ? Center(
-                child: SizedBox(
-                  width: 2,
-                  height: fontSize,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: focusedColor),
-                  ),
-                ),
+                child: CursorCaret(height: fontSize, color: focusedColor),
               )
             : null,
       ),

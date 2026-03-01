@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/calculator/calculator_cubit.dart';
 import '../../domain/entities/expression_node.dart';
+import 'cursor_caret.dart';
 import 'placeholder_box.dart';
 
 /// Recursively renders an [ExpressionNode] as a Widget tree.
@@ -47,6 +48,22 @@ class NodeRenderer extends StatelessWidget {
     );
   }
 
+  /// Appends a blinking caret to the right of [child] when this node is
+  /// focused. Used for every node type that can hold cursor focus.
+  Widget _appendCaret(BuildContext context, Widget child) {
+    if (!_isFocused) return child;
+    final color = Theme.of(context).colorScheme.primary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        child,
+        const SizedBox(width: 1),
+        CursorCaret(height: fontSize * 1.1, color: color),
+      ],
+    );
+  }
+
   // ── Placeholder ───────────────────────────────────────────────────────────────
 
   Widget _buildPlaceholder(BuildContext context) {
@@ -65,18 +82,14 @@ class NodeRenderer extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return _tap(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: _isFocused
-            ? BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: colorScheme.primary, width: 2),
-                ),
-              )
-            : null,
-        child: Text(
-          num.raw,
-          style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
+      child: _appendCaret(
+        context,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Text(
+            num.raw,
+            style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
+          ),
         ),
       ),
     );
@@ -88,12 +101,15 @@ class NodeRenderer extends StatelessWidget {
     final c = node as ConstantNode;
     final colorScheme = Theme.of(context).colorScheme;
     return _tap(
-      child: Text(
-        c.constant.symbol,
-        style: TextStyle(
-          fontSize: fontSize,
-          color: colorScheme.primary,
-          fontStyle: FontStyle.italic,
+      child: _appendCaret(
+        context,
+        Text(
+          c.constant.symbol,
+          style: TextStyle(
+            fontSize: fontSize,
+            color: colorScheme.primary,
+            fontStyle: FontStyle.italic,
+          ),
         ),
       ),
     );
@@ -142,39 +158,51 @@ class NodeRenderer extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (unary.op == UnaryOperatorType.absoluteValue) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text('|',
-              style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface)),
-          NodeRenderer(
-            node: unary.operand,
-            cubit: cubit,
-            focusedNodeId: focusedNodeId,
-            fontSize: fontSize,
+      return _tap(
+        child: _appendCaret(
+          context,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('|',
+                  style:
+                      TextStyle(fontSize: fontSize, color: colorScheme.onSurface)),
+              NodeRenderer(
+                node: unary.operand,
+                cubit: cubit,
+                focusedNodeId: focusedNodeId,
+                fontSize: fontSize,
+              ),
+              Text('|',
+                  style:
+                      TextStyle(fontSize: fontSize, color: colorScheme.onSurface)),
+            ],
           ),
-          Text('|',
-              style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface)),
-        ],
+        ),
       );
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          unary.op.symbol,
-          style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
+    return _tap(
+      child: _appendCaret(
+        context,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              unary.op.symbol,
+              style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
+            ),
+            NodeRenderer(
+              node: unary.operand,
+              cubit: cubit,
+              focusedNodeId: focusedNodeId,
+              fontSize: fontSize,
+            ),
+          ],
         ),
-        NodeRenderer(
-          node: unary.operand,
-          cubit: cubit,
-          focusedNodeId: focusedNodeId,
-          fontSize: fontSize,
-        ),
-      ],
+      ),
     );
   }
 
@@ -184,32 +212,37 @@ class NodeRenderer extends StatelessWidget {
     final frac = node as FractionNode;
     final colorScheme = Theme.of(context).colorScheme;
     final innerFontSize = fontSize * 0.85;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        NodeRenderer(
-          node: frac.numerator,
-          cubit: cubit,
-          focusedNodeId: focusedNodeId,
-          fontSize: innerFontSize,
+    return _tap(
+      child: _appendCaret(
+        context,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            NodeRenderer(
+              node: frac.numerator,
+              cubit: cubit,
+              focusedNodeId: focusedNodeId,
+              fontSize: innerFontSize,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Container(
+                height: 1.5,
+                width: double.infinity,
+                constraints: const BoxConstraints(minWidth: 20),
+                color: colorScheme.onSurface,
+              ),
+            ),
+            NodeRenderer(
+              node: frac.denominator,
+              cubit: cubit,
+              focusedNodeId: focusedNodeId,
+              fontSize: innerFontSize,
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Container(
-            height: 1.5,
-            width: double.infinity,
-            constraints: const BoxConstraints(minWidth: 20),
-            color: colorScheme.onSurface,
-          ),
-        ),
-        NodeRenderer(
-          node: frac.denominator,
-          cubit: cubit,
-          focusedNodeId: focusedNodeId,
-          fontSize: innerFontSize,
-        ),
-      ],
+      ),
     );
   }
 
@@ -221,37 +254,43 @@ class NodeRenderer extends StatelessWidget {
     final indexSize = fontSize * 0.6;
     final radicandSize = fontSize;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (root.index != null)
-          Padding(
-            padding: EdgeInsets.only(bottom: radicandSize * 0.4),
-            child: NodeRenderer(
-              node: root.index!,
-              cubit: cubit,
-              focusedNodeId: focusedNodeId,
-              fontSize: indexSize,
+    return _tap(
+      child: _appendCaret(
+        context,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (root.index != null)
+              Padding(
+                padding: EdgeInsets.only(bottom: radicandSize * 0.4),
+                child: NodeRenderer(
+                  node: root.index!,
+                  cubit: cubit,
+                  focusedNodeId: focusedNodeId,
+                  fontSize: indexSize,
+                ),
+              ),
+            CustomPaint(
+              painter:
+                  _RadicalPainter(color: colorScheme.onSurface, lineWidth: 1.5),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: fontSize * 0.6,
+                  top: fontSize * 0.1,
+                  right: 4,
+                ),
+                child: NodeRenderer(
+                  node: root.radicand,
+                  cubit: cubit,
+                  focusedNodeId: focusedNodeId,
+                  fontSize: radicandSize,
+                ),
+              ),
             ),
-          ),
-        CustomPaint(
-          painter: _RadicalPainter(color: colorScheme.onSurface, lineWidth: 1.5),
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: fontSize * 0.6,
-              top: fontSize * 0.1,
-              right: 4,
-            ),
-            child: NodeRenderer(
-              node: root.radicand,
-              cubit: cubit,
-              focusedNodeId: focusedNodeId,
-              fontSize: radicandSize,
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -261,27 +300,32 @@ class NodeRenderer extends StatelessWidget {
     final pwr = node as PowerNode;
     final expSize = fontSize * 0.65;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        NodeRenderer(
-          node: pwr.base,
-          cubit: cubit,
-          focusedNodeId: focusedNodeId,
-          fontSize: fontSize,
+    return _tap(
+      child: _appendCaret(
+        context,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            NodeRenderer(
+              node: pwr.base,
+              cubit: cubit,
+              focusedNodeId: focusedNodeId,
+              fontSize: fontSize,
+            ),
+            Transform.translate(
+              offset: Offset(0, -fontSize * 0.3),
+              child: NodeRenderer(
+                node: pwr.exponent,
+                cubit: cubit,
+                focusedNodeId: focusedNodeId,
+                fontSize: expSize,
+                isExponent: true,
+              ),
+            ),
+          ],
         ),
-        Transform.translate(
-          offset: Offset(0, -fontSize * 0.3),
-          child: NodeRenderer(
-            node: pwr.exponent,
-            cubit: cubit,
-            focusedNodeId: focusedNodeId,
-            fontSize: expSize,
-            isExponent: true,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -290,11 +334,16 @@ class NodeRenderer extends StatelessWidget {
   Widget _buildTrigFunction(BuildContext context) {
     final trig = node as TrigFunctionNode;
     final colorScheme = Theme.of(context).colorScheme;
-    return _buildFunctionCall(
-      context,
-      name: trig.func.name,
-      argument: trig.argument,
-      nameColor: colorScheme.secondary,
+    return _tap(
+      child: _appendCaret(
+        context,
+        _buildFunctionCall(
+          context,
+          name: trig.func.name,
+          argument: trig.argument,
+          nameColor: colorScheme.secondary,
+        ),
+      ),
     );
   }
 
@@ -305,38 +354,47 @@ class NodeRenderer extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (log.logType == LogType.arbitraryBase && log.base != null) {
-      // log_base(argument)
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            'log',
-            style: TextStyle(
-              fontSize: fontSize,
-              color: colorScheme.secondary,
-              fontWeight: FontWeight.w500,
-            ),
+      return _tap(
+        child: _appendCaret(
+          context,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'log',
+                style: TextStyle(
+                  fontSize: fontSize,
+                  color: colorScheme.secondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Transform.translate(
+                offset: Offset(0, fontSize * 0.2),
+                child: NodeRenderer(
+                  node: log.base!,
+                  cubit: cubit,
+                  focusedNodeId: focusedNodeId,
+                  fontSize: fontSize * 0.6,
+                ),
+              ),
+              _buildParens(context, log.argument),
+            ],
           ),
-          Transform.translate(
-            offset: Offset(0, fontSize * 0.2),
-            child: NodeRenderer(
-              node: log.base!,
-              cubit: cubit,
-              focusedNodeId: focusedNodeId,
-              fontSize: fontSize * 0.6,
-            ),
-          ),
-          _buildParens(context, log.argument),
-        ],
+        ),
       );
     }
 
-    return _buildFunctionCall(
-      context,
-      name: log.logType.label,
-      argument: log.argument,
-      nameColor: colorScheme.secondary,
+    return _tap(
+      child: _appendCaret(
+        context,
+        _buildFunctionCall(
+          context,
+          name: log.logType.label,
+          argument: log.argument,
+          nameColor: colorScheme.secondary,
+        ),
+      ),
     );
   }
 
@@ -344,7 +402,12 @@ class NodeRenderer extends StatelessWidget {
 
   Widget _buildParenthesized(BuildContext context) {
     final paren = node as ParenthesizedNode;
-    return _buildParens(context, paren.inner);
+    return _tap(
+      child: _appendCaret(
+        context,
+        _buildParens(context, paren.inner),
+      ),
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
