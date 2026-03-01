@@ -239,32 +239,37 @@ class NodeRenderer extends StatelessWidget {
     return _tap(
       child: _appendCaret(
         context,
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            NodeRenderer(
-              node: frac.numerator,
-              cubit: cubit,
-              cursor: cursor,
-              fontSize: innerFontSize,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Container(
-                height: 1.5,
-                width: double.infinity,
-                constraints: const BoxConstraints(minWidth: 20),
-                color: colorScheme.onSurface,
+        IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: NodeRenderer(
+                  node: frac.numerator,
+                  cubit: cubit,
+                  cursor: cursor,
+                  fontSize: innerFontSize,
+                ),
               ),
-            ),
-            NodeRenderer(
-              node: frac.denominator,
-              cubit: cubit,
-              cursor: cursor,
-              fontSize: innerFontSize,
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Container(
+                  height: 1.5,
+                  constraints: const BoxConstraints(minWidth: 20),
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              Center(
+                child: NodeRenderer(
+                  node: frac.denominator,
+                  cubit: cubit,
+                  cursor: cursor,
+                  fontSize: innerFontSize,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
