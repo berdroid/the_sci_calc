@@ -32,8 +32,25 @@ a slot, digits, operators, functions, constants, and parentheses all build up th
 produces `√(3 + 4)`, not `√3 + 4`. Pressing the left or right arrow key moves the cursor out of
 the current slot and into the surrounding expression.
 
-Navigation between operator arguments is possible by tapping/clicking the field. On platforms with
-hardware keyboard, using the arrow and tab keys also navigates within or between operator arguments.
+#### Cursor
+
+The insertion point is shown as a thin blinking vertical line. It can appear:
+
+* **Inside a number** — between any two adjacent digits, or before the first / after the last digit.
+  Typing a digit inserts it at that exact position.
+* **Inside an empty slot** — the caret blinks inside the shaded placeholder box.
+* **Before a sub-expression** (*entry* position) — the caret appears to the left of a structural
+  element such as a root, fraction, function call, or constant. Input at this position
+  *prepends* to the expression: typing a digit inserts `digit × expression` (implicit multiply);
+  typing an operator inserts `□ op expression`, placing a new empty slot to the left.
+* **After a sub-expression** (*exit* position) — the caret appears to the right of a structural
+  element. Input here appends in the normal way: typing an operator wraps the expression as the
+  left operand and creates a new empty slot on the right.
+
+Navigation between operator arguments is possible by tapping/clicking anywhere in the expression,
+which places the cursor at the end of the tapped element. On platforms with a hardware keyboard,
+the left and right arrow keys step through every cursor position in reading order, including
+entry and exit positions of every structural element.
 
 Long-pressing a field will select its contents, e.g. the argument of a root. Repeatedly long-pressing
 a selection will extend the selection to the surrounding operator or expression until the whole
