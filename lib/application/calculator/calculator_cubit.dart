@@ -142,13 +142,19 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void insertFraction() {
     final denominatorId = _newId();
+    final scope = _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
+    // If the numerator slot is still empty, start there; if it was a filled
+    // expression that got wrapped, move straight to the denominator.
+    final newCursor = scope is PlaceholderNode
+        ? CursorPosition(focusedNodeId: scope.id)
+        : CursorPosition(focusedNodeId: denominatorId);
     _insertWrappingScope(
-      (scope) => ExpressionNode.fraction(
+      (s) => ExpressionNode.fraction(
         id: _newId(),
-        numerator: scope,
+        numerator: s,
         denominator: ExpressionNode.placeholder(id: denominatorId),
       ),
-      CursorPosition(focusedNodeId: denominatorId),
+      newCursor,
     );
   }
 

@@ -25,7 +25,7 @@ class NodeRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (node) {
+    final widget = switch (node) {
       PlaceholderNode() => _buildPlaceholder(context),
       NumberNode() => _buildNumber(context),
       ConstantNode() => _buildConstant(context),
@@ -38,6 +38,22 @@ class NodeRenderer extends StatelessWidget {
       LogFunctionNode() => _buildLogFunction(context),
       ParenthesizedNode() => _buildParenthesized(context),
     };
+
+    // Scroll the horizontal SingleChildScrollView to keep the cursor visible.
+    if (_isFocused) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          Scrollable.ensureVisible(
+            context,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+
+    return widget;
   }
 
   bool get _isFocused => cursor != null && node.id == cursor!.focusedNodeId;
