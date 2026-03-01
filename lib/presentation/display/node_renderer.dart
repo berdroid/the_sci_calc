@@ -19,7 +19,7 @@ class NodeRenderer extends StatelessWidget {
 
   final ExpressionNode node;
   final CalculatorCubit cubit;
-  final CursorPosition cursor;
+  final CursorPosition? cursor;
   final double fontSize;
   final bool isExponent;
 
@@ -40,7 +40,7 @@ class NodeRenderer extends StatelessWidget {
     };
   }
 
-  bool get _isFocused => node.id == cursor.focusedNodeId;
+  bool get _isFocused => cursor != null && node.id == cursor!.focusedNodeId;
 
   Widget _tap({required Widget child}) {
     return GestureDetector(
@@ -55,7 +55,7 @@ class NodeRenderer extends StatelessWidget {
     if (!_isFocused) return child;
     final color = Theme.of(context).colorScheme.primary;
     final caret = CursorCaret(height: fontSize * 1.1, color: color);
-    if (cursor.charOffset == 0) {
+    if (cursor!.charOffset == 0) {
       // Entry position: caret before the node's rendered widget.
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -90,7 +90,7 @@ class NodeRenderer extends StatelessWidget {
     final style = TextStyle(fontSize: fontSize, color: colorScheme.onSurface);
 
     if (_isFocused) {
-      final k = cursor.charOffset.clamp(0, num.raw.length);
+      final k = cursor!.charOffset.clamp(0, num.raw.length);
       final before = num.raw.substring(0, k);
       final after = num.raw.substring(k);
       final caretColor = colorScheme.primary;
