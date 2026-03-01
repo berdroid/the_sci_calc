@@ -23,6 +23,13 @@ class ResultFormatter {
     if (value.isNaN) return 'Not a number';
     if (value.isInfinite) return value > 0 ? '∞' : '-∞';
 
+    // Values below 1e-15 in magnitude are indistinguishable from zero at
+    // 15 significant figures — they represent floating-point rounding noise
+    // from transcendental functions (e.g. sin(π) ≈ 1.22×10⁻¹⁶ instead of 0).
+    // The rational formatter already applies the same threshold via its
+    // continued-fraction algorithm; snap here to keep all formats consistent.
+    if (value.abs() < 1e-15) value = 0.0;
+
     return switch (fmt) {
       DisplayFormat.decimal => _decimal(value),
       DisplayFormat.scientific => _scientific(value),
