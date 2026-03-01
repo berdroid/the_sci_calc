@@ -260,8 +260,35 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void insertConstant(ConstantType constant) {
     final focusId = state.cursor.focusedNodeId;
-    final newNode = ExpressionNode.constant(id: focusId, constant: constant);
-    _emitReplaced(focusId, newNode,
+    final k = state.cursor.charOffset;
+    final node = _findNode(state.expressionRoot, focusId);
+
+    // At the exit of a number or constant, auto-insert an implicit multiply:
+    // e.g. "2" + π  →  2 × π,  and  π + e  →  π × e.
+    final atExit = switch (node) {
+      NumberNode(:final raw) => k == raw.length,
+      ConstantNode() => k == 1,
+      _ => false,
+    };
+
+    if (atExit) {
+      final constId = _newId();
+      final newConst = ExpressionNode.constant(id: constId, constant: constant);
+      _emitReplaced(
+        focusId,
+        ExpressionNode.binaryOp(
+          id: _newId(),
+          op: OperatorType.multiply,
+          left: node!,
+          right: newConst,
+        ),
+        CursorPosition(focusedNodeId: constId, charOffset: 1),
+      );
+      return;
+    }
+
+    // Default: replace the focused node (typically a placeholder) with the constant.
+    _emitReplaced(focusId, ExpressionNode.constant(id: focusId, constant: constant),
         CursorPosition(focusedNodeId: focusId, charOffset: 1));
   }
 
