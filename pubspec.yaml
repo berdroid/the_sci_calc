@@ -48,5 +48,34 @@ dev_dependencies:
   bloc_test: ^10.0.0
   mocktail: ^1.0.4
 
+  # Icon generation
+  flutter_launcher_icons: ^0.14.3
+
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  # Standard icon (iOS, macOS, Windows, Web, Linux)
+  image_path: "assets/icons/app_icon.png"
+  # Android
+  android: true
+  adaptive_icon_background: "#0D47A1"
+  adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
+  # iOS
+  ios: true
+  remove_alpha_ios: true
+  # Web
+  web:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
+    background_color: "#0D47A1"
+    theme_color: "#1976D2"
+  # Windows
+  windows:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
+    icon_size: 48
+  # macOS
+  macos:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
