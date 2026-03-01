@@ -47,6 +47,18 @@ The insertion point is shown as a thin blinking vertical line. It can appear:
   element. Input here appends in the normal way: typing an operator wraps the expression as the
   left operand and creates a new empty slot on the right.
 
+#### Implicit multiplication
+
+When the cursor is at the end of a number or a constant (π, e), inserting a constant, a function,
+or a root automatically inserts an implicit `×` between the existing value and the new element.
+Examples:
+* `2` then `π`  →  `2 × π`
+* `3` then `sin`  →  `3 × sin(□)`
+* `π` then `√`  →  `π × √(□)`
+
+This avoids the need to type an explicit `×` in the common case of a coefficient followed by
+a function or constant, such as `sin(2π)`.
+
 Navigation between operator arguments is possible by tapping/clicking anywhere in the expression,
 which places the cursor at the end of the tapped element. On platforms with a hardware keyboard,
 the left and right arrow keys step through every cursor position in reading order, including

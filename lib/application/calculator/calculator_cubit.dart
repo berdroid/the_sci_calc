@@ -158,7 +158,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       id: _newId(),
       radicand: ExpressionNode.placeholder(id: radicandId),
     );
-    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: radicandId));
+    _insertWithImplicitMultiply(newNode, CursorPosition(focusedNodeId: radicandId));
   }
 
   void insertNthRoot() {
@@ -169,7 +169,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       radicand: ExpressionNode.placeholder(id: radicandId),
       index: ExpressionNode.placeholder(id: indexId),
     );
-    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: indexId));
+    _insertWithImplicitMultiply(newNode, CursorPosition(focusedNodeId: indexId));
   }
 
   void insertPower() {
@@ -213,7 +213,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       func: func,
       argument: ExpressionNode.placeholder(id: argId),
     );
-    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: argId));
+    _insertWithImplicitMultiply(newNode, CursorPosition(focusedNodeId: argId));
   }
 
   void insertLogFunction(LogType logType) {
@@ -223,7 +223,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       logType: logType,
       argument: ExpressionNode.placeholder(id: argId),
     );
-    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: argId));
+    _insertWithImplicitMultiply(newNode, CursorPosition(focusedNodeId: argId));
   }
 
   void insertAbsoluteValue() {
@@ -504,6 +504,39 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       lastResult: null,
       showingResult: false,
     ));
+  }
+
+  /// Like [_insertAtFocusedPlaceholder], but when the cursor is at the exit
+  /// of a [NumberNode] or [ConstantNode] auto-inserts an implicit multiply:
+  ///   2  + sin  →  2 × sin(□)
+  ///   π  + √    →  π × √(□)
+  void _insertWithImplicitMultiply(
+      ExpressionNode newNode, CursorPosition newCursor) {
+    final focusId = state.cursor.focusedNodeId;
+    final k = state.cursor.charOffset;
+    final node = _findNode(state.expressionRoot, focusId);
+
+    final atExit = switch (node) {
+      NumberNode(:final raw) => k == raw.length,
+      ConstantNode() => k == 1,
+      _ => false,
+    };
+
+    if (atExit) {
+      _emitReplaced(
+        focusId,
+        ExpressionNode.binaryOp(
+          id: _newId(),
+          op: OperatorType.multiply,
+          left: node!,
+          right: newNode,
+        ),
+        newCursor,
+      );
+      return;
+    }
+
+    _insertAtFocusedPlaceholder(newNode, newCursor);
   }
 
   /// Inserts [newNode] in place of the currently-focused [PlaceholderNode].
