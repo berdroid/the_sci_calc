@@ -275,7 +275,12 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
     switch (node) {
       case NumberNode(:final id, :final raw):
-        if (k == 0) return; // nothing to the left of the cursor
+        if (k == 0) {
+          // Nothing inside the number to the left; remove the preceding
+          // binary operator (if this number is the right operand of one).
+          _deleteLeftOperator(id);
+          return;
+        }
         final newRaw = '${raw.substring(0, k - 1)}${raw.substring(k)}';
         if (newRaw.isEmpty) {
           _emitReplaced(id, ExpressionNode.placeholder(id: id),
@@ -285,19 +290,66 @@ class CalculatorCubit extends Cubit<CalculatorState> {
               CursorPosition(focusedNodeId: id, charOffset: k - 1));
         }
 
-      case PlaceholderNode():
-        final parent = _findParent(state.expressionRoot, focusId);
-        if (parent != null) {
+      case PlaceholderNode(:final id):
+        final parent = _findParent(state.expressionRoot, id);
+        if (parent == null) return; // root placeholder — nothing to delete
+        if (parent is BinaryOpNode) {
+          if (parent.right.id == id) {
+            // Placeholder is the right operand: remove the operator and
+            // placeholder, keeping the left child.
+            _collapseToChild(parent, parent.left);
+          }
+          // Placeholder is the left operand: cursor is already at the
+          // leftmost position of the binary expression — no-op.
+        } else {
+          // Structural parent (trig, root, fraction, etc.): remove the
+          // parent node and replace with a plain placeholder.
           final newId = _newId();
           _emitReplaced(parent.id, ExpressionNode.placeholder(id: newId),
               CursorPosition(focusedNodeId: newId));
         }
 
       default:
-        final newId = _newId();
-        _emitReplaced(focusId, ExpressionNode.placeholder(id: newId),
-            CursorPosition(focusedNodeId: newId));
+        if (k == 0) {
+          // Entry position: nothing inside this node is to the left of the
+          // cursor. Remove the preceding binary operator (if any).
+          _deleteLeftOperator(focusId);
+        } else {
+          // Exit position (k == 1): the node itself is the entity immediately
+          // to the left of the cursor — replace it with a placeholder.
+          final newId = _newId();
+          _emitReplaced(focusId, ExpressionNode.placeholder(id: newId),
+              CursorPosition(focusedNodeId: newId));
+        }
     }
+  }
+
+  /// If [nodeId] is the direct right child of a [BinaryOpNode], removes
+  /// the operator by replacing the [BinaryOpNode] with its left child.
+  /// Otherwise a no-op.
+  void _deleteLeftOperator(NodeId nodeId) {
+    final parent = _findParent(state.expressionRoot, nodeId);
+    if (parent is BinaryOpNode && parent.right.id == nodeId) {
+      _collapseToChild(parent, parent.left);
+    }
+  }
+
+  /// Replaces [binOp] in the expression tree with [keepChild] and moves
+  /// the cursor to the last navigable position within [keepChild].
+  void _collapseToChild(BinaryOpNode binOp, ExpressionNode keepChild) {
+    final newRoot = binOp.id == state.expressionRoot.id
+        ? keepChild
+        : _replaceNode(state.expressionRoot, binOp.id, keepChild);
+    final positions = _allNavigablePositions(keepChild);
+    final newCursor = positions.isNotEmpty
+        ? positions.last
+        : CursorPosition(focusedNodeId: keepChild.id);
+    emit(state.copyWith(
+      expressionRoot: newRoot,
+      cursor: newCursor,
+      lastResult: null,
+      showingResult: false,
+    ));
   }
 
   void clear() {
