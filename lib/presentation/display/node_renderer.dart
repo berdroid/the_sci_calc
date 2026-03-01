@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/calculator/calculator_cubit.dart';
+import '../../domain/entities/cursor_position.dart';
 import '../../domain/entities/expression_node.dart';
 import 'cursor_caret.dart';
 import 'placeholder_box.dart';
@@ -11,14 +12,14 @@ class NodeRenderer extends StatelessWidget {
     super.key,
     required this.node,
     required this.cubit,
-    required this.focusedNodeId,
+    required this.cursor,
     this.fontSize = 26.0,
     this.isExponent = false,
   });
 
   final ExpressionNode node;
   final CalculatorCubit cubit;
-  final String focusedNodeId;
+  final CursorPosition cursor;
   final double fontSize;
   final bool isExponent;
 
@@ -39,7 +40,7 @@ class NodeRenderer extends StatelessWidget {
     };
   }
 
-  bool get _isFocused => node.id == focusedNodeId;
+  bool get _isFocused => node.id == cursor.focusedNodeId;
 
   Widget _tap({required Widget child}) {
     return GestureDetector(
@@ -48,19 +49,25 @@ class NodeRenderer extends StatelessWidget {
     );
   }
 
-  /// Appends a blinking caret to the right of [child] when this node is
-  /// focused. Used for every node type that can hold cursor focus.
+  /// Places a blinking caret before (entry, charOffset==0) or after (exit,
+  /// charOffset==1) [child] when this structural node is focused.
   Widget _appendCaret(BuildContext context, Widget child) {
     if (!_isFocused) return child;
     final color = Theme.of(context).colorScheme.primary;
+    final caret = CursorCaret(height: fontSize * 1.1, color: color);
+    if (cursor.charOffset == 0) {
+      // Entry position: caret before the node's rendered widget.
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [caret, const SizedBox(width: 1), child],
+      );
+    }
+    // Exit position: caret after the node's rendered widget.
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        child,
-        const SizedBox(width: 1),
-        CursorCaret(height: fontSize * 1.1, color: color),
-      ],
+      children: [child, const SizedBox(width: 1), caret],
     );
   }
 
@@ -80,17 +87,33 @@ class NodeRenderer extends StatelessWidget {
   Widget _buildNumber(BuildContext context) {
     final num = node as NumberNode;
     final colorScheme = Theme.of(context).colorScheme;
+    final style = TextStyle(fontSize: fontSize, color: colorScheme.onSurface);
 
-    return _tap(
-      child: _appendCaret(
-        context,
-        Padding(
+    if (_isFocused) {
+      final k = cursor.charOffset.clamp(0, num.raw.length);
+      final before = num.raw.substring(0, k);
+      final after = num.raw.substring(k);
+      final caretColor = colorScheme.primary;
+      return _tap(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Text(
-            num.raw,
-            style: TextStyle(fontSize: fontSize, color: colorScheme.onSurface),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (before.isNotEmpty) Text(before, style: style),
+              CursorCaret(height: fontSize * 1.1, color: caretColor),
+              if (after.isNotEmpty) Text(after, style: style),
+            ],
           ),
         ),
+      );
+    }
+
+    return _tap(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(num.raw, style: style),
       ),
     );
   }
@@ -100,6 +123,7 @@ class NodeRenderer extends StatelessWidget {
   Widget _buildConstant(BuildContext context) {
     final c = node as ConstantNode;
     final colorScheme = Theme.of(context).colorScheme;
+    // _appendCaret handles charOffset 0 (before) and 1 (after).
     return _tap(
       child: _appendCaret(
         context,
@@ -127,7 +151,7 @@ class NodeRenderer extends StatelessWidget {
         NodeRenderer(
           node: bin.left,
           cubit: cubit,
-          focusedNodeId: focusedNodeId,
+          cursor: cursor,
           fontSize: fontSize,
         ),
         Padding(
@@ -144,7 +168,7 @@ class NodeRenderer extends StatelessWidget {
         NodeRenderer(
           node: bin.right,
           cubit: cubit,
-          focusedNodeId: focusedNodeId,
+          cursor: cursor,
           fontSize: fontSize,
         ),
       ],
@@ -171,7 +195,7 @@ class NodeRenderer extends StatelessWidget {
               NodeRenderer(
                 node: unary.operand,
                 cubit: cubit,
-                focusedNodeId: focusedNodeId,
+                cursor: cursor,
                 fontSize: fontSize,
               ),
               Text('|',
@@ -197,7 +221,7 @@ class NodeRenderer extends StatelessWidget {
             NodeRenderer(
               node: unary.operand,
               cubit: cubit,
-              focusedNodeId: focusedNodeId,
+              cursor: cursor,
               fontSize: fontSize,
             ),
           ],
@@ -222,7 +246,7 @@ class NodeRenderer extends StatelessWidget {
             NodeRenderer(
               node: frac.numerator,
               cubit: cubit,
-              focusedNodeId: focusedNodeId,
+              cursor: cursor,
               fontSize: innerFontSize,
             ),
             Padding(
@@ -237,7 +261,7 @@ class NodeRenderer extends StatelessWidget {
             NodeRenderer(
               node: frac.denominator,
               cubit: cubit,
-              focusedNodeId: focusedNodeId,
+              cursor: cursor,
               fontSize: innerFontSize,
             ),
           ],
@@ -267,7 +291,7 @@ class NodeRenderer extends StatelessWidget {
                 child: NodeRenderer(
                   node: root.index!,
                   cubit: cubit,
-                  focusedNodeId: focusedNodeId,
+                  cursor: cursor,
                   fontSize: indexSize,
                 ),
               ),
@@ -283,7 +307,7 @@ class NodeRenderer extends StatelessWidget {
                 child: NodeRenderer(
                   node: root.radicand,
                   cubit: cubit,
-                  focusedNodeId: focusedNodeId,
+                  cursor: cursor,
                   fontSize: radicandSize,
                 ),
               ),
@@ -310,7 +334,7 @@ class NodeRenderer extends StatelessWidget {
             NodeRenderer(
               node: pwr.base,
               cubit: cubit,
-              focusedNodeId: focusedNodeId,
+              cursor: cursor,
               fontSize: fontSize,
             ),
             Transform.translate(
@@ -318,7 +342,7 @@ class NodeRenderer extends StatelessWidget {
               child: NodeRenderer(
                 node: pwr.exponent,
                 cubit: cubit,
-                focusedNodeId: focusedNodeId,
+                cursor: cursor,
                 fontSize: expSize,
                 isExponent: true,
               ),
@@ -374,7 +398,7 @@ class NodeRenderer extends StatelessWidget {
                 child: NodeRenderer(
                   node: log.base!,
                   cubit: cubit,
-                  focusedNodeId: focusedNodeId,
+                  cursor: cursor,
                   fontSize: fontSize * 0.6,
                 ),
               ),
@@ -448,7 +472,7 @@ class NodeRenderer extends StatelessWidget {
         NodeRenderer(
           node: inner,
           cubit: cubit,
-          focusedNodeId: focusedNodeId,
+          cursor: cursor,
           fontSize: fontSize,
         ),
         Text(

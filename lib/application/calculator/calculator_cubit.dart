@@ -30,18 +30,24 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void appendDigit(String digit) {
     final focusId = state.cursor.focusedNodeId;
+    final k = state.cursor.charOffset;
     final node = _findNode(state.expressionRoot, focusId);
     if (node == null) return;
 
     switch (node) {
       case PlaceholderNode(:final id):
         final newNode = ExpressionNode.number(id: id, raw: digit);
-        _emitReplaced(id, newNode, id);
+        _emitReplaced(id, newNode, CursorPosition(focusedNodeId: id, charOffset: 1));
 
       case NumberNode(:final id, :final raw):
         if (digit == '.' && raw.contains('.')) return;
-        final newRaw = raw == '0' && digit != '.' ? digit : raw + digit;
-        _emitReplaced(id, ExpressionNode.number(id: id, raw: newRaw), id);
+        final pos = k.clamp(0, raw.length);
+        // Replace a lone '0' only when cursor is at its end.
+        final (newRaw, newOffset) = (raw == '0' && digit != '.' && pos == 1)
+            ? (digit, 1)
+            : ('${raw.substring(0, pos)}$digit${raw.substring(pos)}', pos + 1);
+        _emitReplaced(id, ExpressionNode.number(id: id, raw: newRaw),
+            CursorPosition(focusedNodeId: id, charOffset: newOffset));
 
       default:
         final placeholder = _firstPlaceholder(node);
@@ -49,7 +55,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
           _emitReplaced(
             placeholder.id,
             ExpressionNode.number(id: placeholder.id, raw: digit),
-            placeholder.id,
+            CursorPosition(focusedNodeId: placeholder.id, charOffset: 1),
           );
         }
     }
@@ -74,7 +80,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         left: scope,
         right: ExpressionNode.placeholder(id: rightId),
       ),
-      rightId,
+      CursorPosition(focusedNodeId: rightId),
     );
   }
 
@@ -88,7 +94,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         numerator: scope,
         denominator: ExpressionNode.placeholder(id: denominatorId),
       ),
-      denominatorId,
+      CursorPosition(focusedNodeId: denominatorId),
     );
   }
 
@@ -98,7 +104,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       id: _newId(),
       radicand: ExpressionNode.placeholder(id: radicandId),
     );
-    _insertAtFocusedPlaceholder(newNode, radicandId);
+    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: radicandId));
   }
 
   void insertNthRoot() {
@@ -109,7 +115,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       radicand: ExpressionNode.placeholder(id: radicandId),
       index: ExpressionNode.placeholder(id: indexId),
     );
-    _insertAtFocusedPlaceholder(newNode, indexId);
+    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: indexId));
   }
 
   void insertPower() {
@@ -120,31 +126,29 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         base: scope,
         exponent: ExpressionNode.placeholder(id: exponentId),
       ),
-      exponentId,
+      CursorPosition(focusedNodeId: exponentId),
     );
   }
 
   void insertSquare() {
-    final focusId = state.cursor.focusedNodeId;
     _insertWrappingScope(
       (scope) => ExpressionNode.power(
         id: _newId(),
         base: scope,
         exponent: ExpressionNode.number(id: _newId(), raw: '2'),
       ),
-      focusId, // cursor stays on the same leaf (now inside the base)
+      state.cursor, // cursor stays at same position inside the base
     );
   }
 
   void insertReciprocal() {
-    final focusId = state.cursor.focusedNodeId;
     _insertWrappingScope(
       (scope) => ExpressionNode.fraction(
         id: _newId(),
         numerator: ExpressionNode.number(id: _newId(), raw: '1'),
         denominator: scope,
       ),
-      focusId,
+      state.cursor, // cursor stays at same position inside the denominator
     );
   }
 
@@ -155,7 +159,7 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       func: func,
       argument: ExpressionNode.placeholder(id: argId),
     );
-    _insertAtFocusedPlaceholder(newNode, argId);
+    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: argId));
   }
 
   void insertLogFunction(LogType logType) {
@@ -165,87 +169,80 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       logType: logType,
       argument: ExpressionNode.placeholder(id: argId),
     );
-    _insertAtFocusedPlaceholder(newNode, argId);
+    _insertAtFocusedPlaceholder(newNode, CursorPosition(focusedNodeId: argId));
   }
 
   void insertAbsoluteValue() {
-    final focusId = state.cursor.focusedNodeId;
     _insertWrappingScope(
       (scope) => ExpressionNode.unaryOp(
         id: _newId(),
         op: UnaryOperatorType.absoluteValue,
         operand: scope,
       ),
-      focusId,
+      state.cursor,
     );
   }
 
   void insertNegate() {
-    final focusId = state.cursor.focusedNodeId;
     _insertWrappingScope(
       (scope) => ExpressionNode.unaryOp(
         id: _newId(),
         op: UnaryOperatorType.negate,
         operand: scope,
       ),
-      focusId,
+      state.cursor,
     );
   }
 
   void insertParentheses() {
-    final focusId = state.cursor.focusedNodeId;
     _insertWrappingScope(
       (scope) => ExpressionNode.parenthesized(
         id: _newId(),
         inner: scope,
       ),
-      focusId,
+      state.cursor,
     );
   }
 
   void insertConstant(ConstantType constant) {
     final focusId = state.cursor.focusedNodeId;
     final newNode = ExpressionNode.constant(id: focusId, constant: constant);
-    _emitReplaced(focusId, newNode, focusId);
+    _emitReplaced(focusId, newNode,
+        CursorPosition(focusedNodeId: focusId, charOffset: 1));
   }
 
   // ── Delete / clear ────────────────────────────────────────────────────────────
 
   void deleteAtCursor() {
     final focusId = state.cursor.focusedNodeId;
+    final k = state.cursor.charOffset;
     final node = _findNode(state.expressionRoot, focusId);
     if (node == null) return;
 
     switch (node) {
       case NumberNode(:final id, :final raw):
-        if (raw.length > 1) {
-          _emitReplaced(
-            id,
-            ExpressionNode.number(id: id, raw: raw.substring(0, raw.length - 1)),
-            id,
-          );
+        if (k == 0) return; // nothing to the left of the cursor
+        final newRaw = '${raw.substring(0, k - 1)}${raw.substring(k)}';
+        if (newRaw.isEmpty) {
+          _emitReplaced(id, ExpressionNode.placeholder(id: id),
+              CursorPosition(focusedNodeId: id));
         } else {
-          _emitReplaced(id, ExpressionNode.placeholder(id: id), id);
+          _emitReplaced(id, ExpressionNode.number(id: id, raw: newRaw),
+              CursorPosition(focusedNodeId: id, charOffset: k - 1));
         }
 
       case PlaceholderNode():
         final parent = _findParent(state.expressionRoot, focusId);
         if (parent != null) {
           final newId = _newId();
-          _emitReplaced(
-            parent.id,
-            ExpressionNode.placeholder(id: newId),
-            newId,
-          );
+          _emitReplaced(parent.id, ExpressionNode.placeholder(id: newId),
+              CursorPosition(focusedNodeId: newId));
         }
 
       default:
         final newId = _newId();
-        _emitReplaced(
-          focusId,
-          ExpressionNode.placeholder(id: newId),
-          newId,
-        );
+        _emitReplaced(focusId, ExpressionNode.placeholder(id: newId),
+            CursorPosition(focusedNodeId: newId));
     }
   }
 
@@ -267,27 +264,31 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   // ── Cursor navigation ─────────────────────────────────────────────────────────
 
   void moveCursorLeft() {
-    final nodes = _allNavigableNodes(state.expressionRoot);
-    final idx = nodes.indexWhere((n) => n.id == state.cursor.focusedNodeId);
+    final positions = _allNavigablePositions(state.expressionRoot);
+    final idx = positions.indexWhere((p) => p == state.cursor);
     if (idx > 0) {
-      emit(state.copyWith(
-        cursor: CursorPosition(focusedNodeId: nodes[idx - 1].id),
-      ));
+      emit(state.copyWith(cursor: positions[idx - 1]));
     }
   }
 
   void moveCursorRight() {
-    final nodes = _allNavigableNodes(state.expressionRoot);
-    final idx = nodes.indexWhere((n) => n.id == state.cursor.focusedNodeId);
-    if (idx >= 0 && idx < nodes.length - 1) {
-      emit(state.copyWith(
-        cursor: CursorPosition(focusedNodeId: nodes[idx + 1].id),
-      ));
+    final positions = _allNavigablePositions(state.expressionRoot);
+    final idx = positions.indexWhere((p) => p == state.cursor);
+    if (idx >= 0 && idx < positions.length - 1) {
+      emit(state.copyWith(cursor: positions[idx + 1]));
     }
   }
 
   void focusNode(NodeId id) {
-    emit(state.copyWith(cursor: CursorPosition(focusedNodeId: id)));
+    // Tapping a node places the cursor at its natural "after" position.
+    final node = _findNode(state.expressionRoot, id);
+    final offset = switch (node) {
+      NumberNode(:final raw) => raw.length,
+      PlaceholderNode() || null => 0,
+      _ => 1, // constant → after; structural → exit
+    };
+    emit(state.copyWith(
+        cursor: CursorPosition(focusedNodeId: id, charOffset: offset)));
   }
 
   // ── Evaluate ──────────────────────────────────────────────────────────────────
@@ -306,10 +307,14 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void loadExpression(ExpressionNode root) {
     final leaves = _allLeaves(root);
-    final firstId = leaves.isNotEmpty ? leaves.first.id : root.id;
+    final first = leaves.isNotEmpty ? leaves.first : root;
+    final offset = switch (first) {
+      NumberNode(:final raw) => raw.length,
+      _ => 0,
+    };
     emit(state.copyWith(
       expressionRoot: root,
-      cursor: CursorPosition(focusedNodeId: firstId),
+      cursor: CursorPosition(focusedNodeId: first.id, charOffset: offset),
       lastResult: null,
       showingResult: false,
     ));
@@ -348,29 +353,31 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   }
 
   /// Wraps the current scope root with a node built by [builder], then moves
-  /// the cursor to [cursorId]. The scope root is replaced in-place within the
+  /// the cursor to [newCursor]. The scope root is replaced in-place within the
   /// global tree.
   void _insertWrappingScope(
     ExpressionNode Function(ExpressionNode scopeRoot) builder,
-    NodeId cursorId,
+    CursorPosition newCursor,
   ) {
-    final scopeRoot = _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
+    final scopeRoot =
+        _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
     final newNode = builder(scopeRoot);
     final newRoot = scopeRoot.id == state.expressionRoot.id
         ? newNode
         : _replaceNode(state.expressionRoot, scopeRoot.id, newNode);
     emit(state.copyWith(
       expressionRoot: newRoot,
-      cursor: CursorPosition(focusedNodeId: cursorId),
+      cursor: newCursor,
       lastResult: null,
       showingResult: false,
     ));
   }
 
   /// Inserts [newNode] in place of the currently-focused [PlaceholderNode].
-  /// If the focused node is not a placeholder, inserts at the global root
-  /// (fallback for function keys pressed outside of a placeholder).
-  void _insertAtFocusedPlaceholder(ExpressionNode newNode, NodeId cursorId) {
+  /// If the focused node is not a placeholder, replaces the global root
+  /// (fallback for function keys pressed outside a placeholder).
+  void _insertAtFocusedPlaceholder(
+      ExpressionNode newNode, CursorPosition newCursor) {
     final focusId = state.cursor.focusedNodeId;
     final focused = _findNode(state.expressionRoot, focusId);
     final newRoot = focused is PlaceholderNode
@@ -378,19 +385,20 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         : newNode;
     emit(state.copyWith(
       expressionRoot: newRoot,
-      cursor: CursorPosition(focusedNodeId: cursorId),
+      cursor: newCursor,
       lastResult: null,
       showingResult: false,
     ));
   }
 
   /// Replaces the node with [targetId] in the global tree and emits a new
-  /// state with the cursor at [cursorId].
-  void _emitReplaced(NodeId targetId, ExpressionNode replacement, NodeId cursorId) {
+  /// state with the given [cursor].
+  void _emitReplaced(
+      NodeId targetId, ExpressionNode replacement, CursorPosition cursor) {
     final newRoot = _replaceNode(state.expressionRoot, targetId, replacement);
     emit(state.copyWith(
       expressionRoot: newRoot,
-      cursor: CursorPosition(focusedNodeId: cursorId),
+      cursor: cursor,
       lastResult: null,
       showingResult: false,
     ));
@@ -524,57 +532,73 @@ class CalculatorCubit extends Cubit<CalculatorState> {
         _ => <ExpressionNode>[],
       };
 
-  /// All nodes in left-to-right reading order that can receive cursor focus.
+  /// All cursor positions in left-to-right reading order.
   ///
-  /// Leaf nodes (Placeholder, Number, Constant) are included as-is.
-  /// BinaryOpNodes are transparent — only their children appear in the list.
-  /// Every other structural node (Root, Power, Fraction, Trig, Log, Unary,
-  /// Paren) appears **after** all of its children, representing the "exit"
-  /// cursor position just to the right of the rendered node. This lets the
-  /// user press → to step out of a slot and then type an operator that wraps
-  /// the structural node in a larger expression.
-  List<ExpressionNode> _allNavigableNodes(ExpressionNode root) =>
+  /// - [PlaceholderNode]: one position (charOffset 0, caret inside box).
+  /// - [NumberNode] with `n` characters: `n+1` positions (charOffset 0…n),
+  ///   one between each pair of adjacent characters plus before and after.
+  /// - [ConstantNode]: two positions (charOffset 0 = before, 1 = after).
+  /// - [BinaryOpNode]: transparent — only its children's positions.
+  /// - All other structural nodes: entry position (charOffset 0, caret before
+  ///   the rendered widget), children's positions, exit position (charOffset 1,
+  ///   caret after the rendered widget).
+  List<CursorPosition> _allNavigablePositions(ExpressionNode root) =>
       switch (root) {
-        PlaceholderNode() || NumberNode() || ConstantNode() => [root],
+        PlaceholderNode(:final id) => [CursorPosition(focusedNodeId: id)],
+        NumberNode(:final id, :final raw) => List.generate(
+            raw.length + 1,
+            (k) => CursorPosition(focusedNodeId: id, charOffset: k),
+          ),
+        ConstantNode(:final id) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
+          ],
         BinaryOpNode(:final left, :final right) => [
-            ..._allNavigableNodes(left),
-            ..._allNavigableNodes(right),
+            ..._allNavigablePositions(left),
+            ..._allNavigablePositions(right),
           ],
-        UnaryOpNode(:final operand) => [
-            ..._allNavigableNodes(operand),
-            root,
+        UnaryOpNode(:final id, :final operand) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            ..._allNavigablePositions(operand),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        FractionNode(:final numerator, :final denominator) => [
-            ..._allNavigableNodes(numerator),
-            ..._allNavigableNodes(denominator),
-            root,
+        FractionNode(:final id, :final numerator, :final denominator) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            ..._allNavigablePositions(numerator),
+            ..._allNavigablePositions(denominator),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        RootNode(:final radicand, :final index) => [
+        RootNode(:final id, :final radicand, :final index) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
             ...(index != null
-                ? _allNavigableNodes(index)
-                : <ExpressionNode>[]),
-            ..._allNavigableNodes(radicand),
-            root,
+                ? _allNavigablePositions(index)
+                : <CursorPosition>[]),
+            ..._allNavigablePositions(radicand),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        PowerNode(:final base, :final exponent) => [
-            ..._allNavigableNodes(base),
-            ..._allNavigableNodes(exponent),
-            root,
+        PowerNode(:final id, :final base, :final exponent) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            ..._allNavigablePositions(base),
+            ..._allNavigablePositions(exponent),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        TrigFunctionNode(:final argument) => [
-            ..._allNavigableNodes(argument),
-            root,
+        TrigFunctionNode(:final id, :final argument) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            ..._allNavigablePositions(argument),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        LogFunctionNode(:final argument, :final base) => [
+        LogFunctionNode(:final id, :final argument, :final base) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
             ...(base != null
-                ? _allNavigableNodes(base)
-                : <ExpressionNode>[]),
-            ..._allNavigableNodes(argument),
-            root,
+                ? _allNavigablePositions(base)
+                : <CursorPosition>[]),
+            ..._allNavigablePositions(argument),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
-        ParenthesizedNode(:final inner) => [
-            ..._allNavigableNodes(inner),
-            root,
+        ParenthesizedNode(:final id, :final inner) => [
+            CursorPosition(focusedNodeId: id, charOffset: 0),
+            ..._allNavigablePositions(inner),
+            CursorPosition(focusedNodeId: id, charOffset: 1),
           ],
       };
 

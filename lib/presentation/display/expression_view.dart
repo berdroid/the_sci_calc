@@ -20,7 +20,7 @@ class ExpressionView extends StatelessWidget {
             child: NodeRenderer(
               node: state.expressionRoot,
               cubit: cubit,
-              focusedNodeId: state.cursor.focusedNodeId,
+              cursor: state.cursor,
               fontSize: 26,
             ),
           ),
