@@ -491,20 +491,25 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   /// The **scope root** is the largest sub-expression that can be edited
   /// without leaving the current structural slot.
   ///
-  /// Walking upward from the focused node: [BinaryOpNode]s are transparent
-  /// (they are part of the expression being built inside the slot). Any other
-  /// structural node (Trig, Log, Root, Fraction, Power, Paren, Unary) is a
-  /// scope boundary; the child of that node that contains the focus becomes
-  /// the scope root.
+  /// Walking upward from the focused node: [BinaryOpNode]s and
+  /// [UnaryOpNode(negate)] are transparent — they are part of the expression
+  /// being built at the same level, so a binary operator inserted here should
+  /// appear *outside* them (e.g. "-3 +" → "(-3) + □", not "-(3 + □)").
+  /// Any other structural node (Trig, Log, Root, Fraction, Power, Paren,
+  /// absolute-value Unary) is a scope boundary; the child of that node that
+  /// contains the focus becomes the scope root.
   ExpressionNode _findScopeRoot(ExpressionNode globalRoot, NodeId focusId) {
     final path = _pathToNode(globalRoot, focusId);
     if (path == null) return globalRoot;
     for (int i = path.length - 1; i >= 1; i--) {
-      if (path[i - 1] is! BinaryOpNode) {
-        return path[i]; // first non-BinaryOp boundary found — child is scope root
+      final parent = path[i - 1];
+      if (parent is BinaryOpNode) continue;
+      if (parent is UnaryOpNode && parent.op == UnaryOperatorType.negate) {
+        continue; // negate binds tightly to its operand; binary ops escape it
       }
+      return path[i]; // first scope boundary — child is scope root
     }
-    return globalRoot; // only BinaryOpNodes above — scope is global root
+    return globalRoot; // only transparent nodes above — scope is global root
   }
 
   /// Wraps the current scope root with a node built by [builder], then moves
