@@ -34,6 +34,30 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     final node = _findNode(state.expressionRoot, focusId);
     if (node == null) return;
 
+    // At the entry position (charOffset==0) of a structural or constant node,
+    // auto-insert an implicit multiply: digit × scope.
+    if (k == 0 && digit != '.' && node is! NumberNode && node is! PlaceholderNode) {
+      final numId = _newId();
+      final scopeRoot =
+          _findScopeRoot(state.expressionRoot, focusId);
+      final newExpr = ExpressionNode.binaryOp(
+        id: _newId(),
+        op: OperatorType.multiply,
+        left: ExpressionNode.number(id: numId, raw: digit),
+        right: scopeRoot,
+      );
+      final newRoot = scopeRoot.id == state.expressionRoot.id
+          ? newExpr
+          : _replaceNode(state.expressionRoot, scopeRoot.id, newExpr);
+      emit(state.copyWith(
+        expressionRoot: newRoot,
+        cursor: CursorPosition(focusedNodeId: numId, charOffset: 1),
+        lastResult: null,
+        showingResult: false,
+      ));
+      return;
+    }
+
     switch (node) {
       case PlaceholderNode(:final id):
         final newNode = ExpressionNode.number(id: id, raw: digit);
@@ -72,6 +96,36 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   // scope boundaries. The scope root becomes the left operand of the new op.
 
   void insertBinaryOp(OperatorType op) {
+    final node = _findNode(state.expressionRoot, state.cursor.focusedNodeId);
+    if (node == null) return;
+
+    // At the entry position (charOffset==0) of a structural or constant node,
+    // the scope becomes the RIGHT operand: □ op scope.
+    if (state.cursor.charOffset == 0 &&
+        node is! NumberNode &&
+        node is! PlaceholderNode) {
+      final leftId = _newId();
+      final scopeRoot =
+          _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
+      final newBinOp = ExpressionNode.binaryOp(
+        id: _newId(),
+        op: op,
+        left: ExpressionNode.placeholder(id: leftId),
+        right: scopeRoot,
+      );
+      final newRoot = scopeRoot.id == state.expressionRoot.id
+          ? newBinOp
+          : _replaceNode(state.expressionRoot, scopeRoot.id, newBinOp);
+      emit(state.copyWith(
+        expressionRoot: newRoot,
+        cursor: CursorPosition(focusedNodeId: leftId),
+        lastResult: null,
+        showingResult: false,
+      ));
+      return;
+    }
+
+    // Default: scope becomes LEFT operand, new placeholder is RIGHT.
     final rightId = _newId();
     _insertWrappingScope(
       (scope) => ExpressionNode.binaryOp(
