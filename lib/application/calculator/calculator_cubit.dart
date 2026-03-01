@@ -351,18 +351,34 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     }
   }
 
-  /// If [nodeId] is the direct right child of a [BinaryOpNode], removes
-  /// the operator by replacing the [BinaryOpNode] with its left child.
+  /// If [nodeId] is the direct right child of a [BinaryOpNode], removes the
+  /// operator and left operand, keeping the right child. The cursor stays at
+  /// the first position of the right child (where it already was).
   /// Otherwise a no-op.
   void _deleteLeftOperator(NodeId nodeId) {
     final parent = _findParent(state.expressionRoot, nodeId);
     if (parent is BinaryOpNode && parent.right.id == nodeId) {
-      _collapseToChild(parent, parent.left);
+      final keepNode = parent.right;
+      final newRoot = parent.id == state.expressionRoot.id
+          ? keepNode
+          : _replaceNode(state.expressionRoot, parent.id, keepNode);
+      final positions = _allNavigablePositions(keepNode);
+      final newCursor = positions.isNotEmpty
+          ? positions.first
+          : CursorPosition(focusedNodeId: keepNode.id);
+      emit(state.copyWith(
+        expressionRoot: newRoot,
+        cursor: newCursor,
+        lastResult: null,
+        showingResult: false,
+      ));
     }
   }
 
   /// Replaces [binOp] in the expression tree with [keepChild] and moves
   /// the cursor to the last navigable position within [keepChild].
+  /// Used when the right operand is a placeholder: removes the operator and
+  /// placeholder, keeping the left child with cursor at its end.
   void _collapseToChild(BinaryOpNode binOp, ExpressionNode keepChild) {
     final newRoot = binOp.id == state.expressionRoot.id
         ? keepChild
