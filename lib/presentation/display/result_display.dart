@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../application/calculator/calculator_cubit.dart';
 import '../../application/calculator/calculator_state.dart';
+import '../../application/settings/settings_cubit.dart';
 import '../../domain/entities/calculation_result.dart';
 import '../../domain/enums/display_format.dart';
 import '../../infrastructure/evaluation/result_formatter.dart';
@@ -72,6 +73,7 @@ class ResultDisplay extends StatelessWidget {
     final formats = DisplayFormat.values;
     final next = formats[(formats.indexOf(current) + 1) % formats.length];
     context.read<CalculatorCubit>().setDisplayFormat(next);
+    context.read<SettingsCubit>().setDisplayFormat(next);
   }
 }
 
