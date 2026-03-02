@@ -126,16 +126,26 @@ class CalculatorCubit extends Cubit<CalculatorState> {
     }
 
     // Default: scope becomes LEFT operand, new placeholder is RIGHT.
+    // Use precedence-aware scope finding so that "4+3×□" inserts × after 3
+    // only, not after the entire "4+3".
     final rightId = _newId();
-    _insertWrappingScope(
-      (scope) => ExpressionNode.binaryOp(
-        id: _newId(),
-        op: op,
-        left: scope,
-        right: ExpressionNode.placeholder(id: rightId),
-      ),
-      CursorPosition(focusedNodeId: rightId),
+    final scope = _findScopeRootForBinaryOp(
+        state.expressionRoot, state.cursor.focusedNodeId, op);
+    final newNode = ExpressionNode.binaryOp(
+      id: _newId(),
+      op: op,
+      left: scope,
+      right: ExpressionNode.placeholder(id: rightId),
     );
+    final newRoot = scope.id == state.expressionRoot.id
+        ? newNode
+        : _replaceNode(state.expressionRoot, scope.id, newNode);
+    emit(state.copyWith(
+      expressionRoot: newRoot,
+      cursor: CursorPosition(focusedNodeId: rightId),
+      lastResult: null,
+      showingResult: false,
+    ));
   }
 
   // ── Structured nodes ──────────────────────────────────────────────────────────
@@ -510,6 +520,32 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       return path[i]; // first scope boundary — child is scope root
     }
     return globalRoot; // only transparent nodes above — scope is global root
+  }
+
+  /// Precedence-aware variant of [_findScopeRoot] used by [insertBinaryOp].
+  ///
+  /// A [BinaryOpNode] ancestor is transparent only when its operator's
+  /// precedence is ≥ [insertingOp]'s precedence. This ensures that inserting
+  /// a high-precedence operator (× or ÷) does NOT absorb a surrounding
+  /// lower-precedence expression:
+  ///   cursor after "3" in "4+3", press × → scope = 3  → "4 + (3×□)"  ✓
+  ///   cursor after "3" in "4+3", press + → scope = 4+3 → "(4+3)+□"   ✓
+  ExpressionNode _findScopeRootForBinaryOp(
+      ExpressionNode globalRoot, NodeId focusId, OperatorType insertingOp) {
+    final path = _pathToNode(globalRoot, focusId);
+    if (path == null) return globalRoot;
+    final insertingPrec = insertingOp.precedence;
+    for (int i = path.length - 1; i >= 1; i--) {
+      final parent = path[i - 1];
+      if (parent is BinaryOpNode && parent.op.precedence >= insertingPrec) {
+        continue; // same-or-higher precedence: transparent
+      }
+      if (parent is UnaryOpNode && parent.op == UnaryOperatorType.negate) {
+        continue; // negate is always transparent
+      }
+      return path[i];
+    }
+    return globalRoot;
   }
 
   /// Wraps the current scope root with a node built by [builder], then moves
