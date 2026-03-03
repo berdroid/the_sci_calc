@@ -31,6 +31,7 @@ class HistoryEntryTile extends StatelessWidget {
       onDoubleTap: () {
         context.read<CalculatorCubit>().loadExpression(entry.root);
         context.read<HistoryCubit>().clearSelection();
+        Scaffold.maybeOf(context)?.closeDrawer();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),

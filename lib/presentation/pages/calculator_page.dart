@@ -11,6 +11,8 @@ import '../../application/settings/settings_state.dart';
 import '../../domain/entities/calculation_result.dart';
 import '../../domain/entities/expression_node.dart';
 import '../../domain/entities/history_entry.dart';
+import '../../core/constants/app_constants.dart';
+import '../history/history_list.dart';
 import '../layout/calculator_layout.dart';
 import '../widgets/theme_toggle.dart';
 
@@ -78,23 +80,38 @@ class _CalculatorPageState extends State<CalculatorPage> {
           },
         ),
       ],
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Scientific Calculator'),
-          centerTitle: false,
-          actions: const [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: ThemeToggle(),
+      child: Builder(
+        builder: (context) {
+          final isWide = MediaQuery.of(context).size.width >=
+              AppConstants.wideLayoutBreakpoint;
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Scientific Calculator'),
+              centerTitle: false,
+              actions: [
+                if (!isWide)
+                  Builder(
+                    builder: (ctx) => IconButton(
+                      icon: const Icon(Icons.history),
+                      tooltip: 'History',
+                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    ),
+                  ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: ThemeToggle(),
+                ),
+              ],
             ),
-          ],
-        ),
-        body: KeyboardListener(
-          focusNode: _focusNode,
-          autofocus: true,
-          onKeyEvent: _onKey,
-          child: const CalculatorLayout(),
-        ),
+            drawer: isWide ? null : const Drawer(child: HistoryList()),
+            body: KeyboardListener(
+              focusNode: _focusNode,
+              autofocus: true,
+              onKeyEvent: _onKey,
+              child: const CalculatorLayout(),
+            ),
+          );
+        },
       ),
     );
   }
