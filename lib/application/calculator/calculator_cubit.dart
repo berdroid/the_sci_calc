@@ -265,13 +265,12 @@ class CalculatorCubit extends Cubit<CalculatorState> {
   }
 
   void insertParentheses() {
-    _insertWrappingScope(
-      (scope) => ExpressionNode.parenthesized(
-        id: _newId(),
-        inner: scope,
-      ),
-      state.cursor,
+    final innerId = _newId();
+    final newNode = ExpressionNode.parenthesized(
+      id: _newId(),
+      inner: ExpressionNode.placeholder(id: innerId),
     );
+    _insertWithImplicitMultiply(newNode, CursorPosition(focusedNodeId: innerId));
   }
 
   void insertConstant(ConstantType constant) {
