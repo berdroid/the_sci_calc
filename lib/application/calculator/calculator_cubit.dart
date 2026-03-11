@@ -152,20 +152,27 @@ class CalculatorCubit extends Cubit<CalculatorState> {
 
   void insertFraction() {
     final denominatorId = _newId();
-    final scope = _findScopeRoot(state.expressionRoot, state.cursor.focusedNodeId);
-    // If the numerator slot is still empty, start there; if it was a filled
-    // expression that got wrapped, move straight to the denominator.
+    // Use fraction-specific scope: stop at binary ops so that e.g. pressing
+    // a/b after "5/3 + 7" wraps only "7" as the numerator, not "5/3 + 7".
+    final scope = _findFractionNumeratorScope(
+        state.expressionRoot, state.cursor.focusedNodeId);
     final newCursor = scope is PlaceholderNode
         ? CursorPosition(focusedNodeId: scope.id)
         : CursorPosition(focusedNodeId: denominatorId);
-    _insertWrappingScope(
-      (s) => ExpressionNode.fraction(
-        id: _newId(),
-        numerator: s,
-        denominator: ExpressionNode.placeholder(id: denominatorId),
-      ),
-      newCursor,
+    final newNode = ExpressionNode.fraction(
+      id: _newId(),
+      numerator: scope,
+      denominator: ExpressionNode.placeholder(id: denominatorId),
     );
+    final newRoot = scope.id == state.expressionRoot.id
+        ? newNode
+        : _replaceNode(state.expressionRoot, scope.id, newNode);
+    emit(state.copyWith(
+      expressionRoot: newRoot,
+      cursor: newCursor,
+      lastResult: null,
+      showingResult: false,
+    ));
   }
 
   void insertSquareRoot() {
@@ -519,6 +526,27 @@ class CalculatorCubit extends Cubit<CalculatorState> {
       return path[i]; // first scope boundary — child is scope root
     }
     return globalRoot; // only transparent nodes above — scope is global root
+  }
+
+  /// Scope root for fraction numerator insertion.
+  ///
+  /// Like [_findScopeRoot] but treats [BinaryOpNode] as a scope boundary
+  /// (not transparent). Only [UnaryOpNode(negate)] remains transparent, so
+  /// a leading minus is included in the numerator but a binary `+` or `-`
+  /// is not. Example: cursor after "7" in "5/3 + 7" → scope = 7, giving
+  /// "5/3 + 7/□" instead of "(5/3 + 7)/□".
+  ExpressionNode _findFractionNumeratorScope(
+      ExpressionNode globalRoot, NodeId focusId) {
+    final path = _pathToNode(globalRoot, focusId);
+    if (path == null) return globalRoot;
+    for (int i = path.length - 1; i >= 1; i--) {
+      final parent = path[i - 1];
+      if (parent is UnaryOpNode && parent.op == UnaryOperatorType.negate) {
+        continue;
+      }
+      return path[i]; // BinaryOpNode and all structural nodes are boundaries
+    }
+    return globalRoot;
   }
 
   /// Precedence-aware variant of [_findScopeRoot] used by [insertBinaryOp].

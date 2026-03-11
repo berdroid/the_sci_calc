@@ -132,6 +132,73 @@ void main() {
     );
   });
 
+  group('insertFraction', () {
+    blocTest<CalculatorCubit, CalculatorState>(
+      'pressing a/b on empty placeholder creates fraction with cursor in numerator',
+      build: makeCubit,
+      act: (cubit) => cubit.insertFraction(),
+      verify: (cubit) {
+        final root = cubit.state.expressionRoot;
+        expect(root, isA<FractionNode>());
+        final frac = root as FractionNode;
+        expect(frac.numerator, isA<PlaceholderNode>());
+        expect(frac.denominator, isA<PlaceholderNode>());
+        expect(cubit.state.cursor.focusedNodeId, equals(frac.numerator.id));
+      },
+    );
+
+    blocTest<CalculatorCubit, CalculatorState>(
+      'pressing a/b after a number wraps only that number as numerator',
+      build: makeCubit,
+      act: (cubit) {
+        cubit.appendDigit('7');
+        cubit.insertFraction();
+      },
+      verify: (cubit) {
+        final root = cubit.state.expressionRoot;
+        expect(root, isA<FractionNode>());
+        final frac = root as FractionNode;
+        expect(frac.numerator, isA<NumberNode>());
+        expect((frac.numerator as NumberNode).raw, equals('7'));
+        expect(cubit.state.cursor.focusedNodeId, equals(frac.denominator.id));
+      },
+    );
+
+    blocTest<CalculatorCubit, CalculatorState>(
+      'pressing a/b after "5/3 + 7" wraps only 7 as numerator, not the whole expression',
+      build: makeCubit,
+      act: (cubit) {
+        // Build 5/3: type 5, a/b (cursor auto-moves to denominator), type 3
+        cubit.appendDigit('5');
+        cubit.insertFraction(); // → 5/□, cursor at denominator
+        cubit.appendDigit('3'); // → 5/3, cursor at 3
+        // Exit the fraction, then add + 7
+        cubit.moveCursorRight(); // cursor exits fraction
+        cubit.insertBinaryOp(OperatorType.add); // → 5/3 + □
+        cubit.appendDigit('7'); // → 5/3 + 7, cursor at 7
+        // Press a/b again — should wrap only 7, giving 5/3 + 7/□
+        cubit.insertFraction();
+      },
+      verify: (cubit) {
+        // Top level: BinaryOpNode(+)
+        final root = cubit.state.expressionRoot;
+        expect(root, isA<BinaryOpNode>());
+        final add = root as BinaryOpNode;
+        expect(add.op, equals(OperatorType.add));
+        // Left side: 5/3
+        expect(add.left, isA<FractionNode>());
+        // Right side: 7/□
+        expect(add.right, isA<FractionNode>());
+        final rightFrac = add.right as FractionNode;
+        expect(rightFrac.numerator, isA<NumberNode>());
+        expect((rightFrac.numerator as NumberNode).raw, equals('7'));
+        expect(rightFrac.denominator, isA<PlaceholderNode>());
+        expect(cubit.state.cursor.focusedNodeId,
+            equals(rightFrac.denominator.id));
+      },
+    );
+  });
+
   group('clear', () {
     blocTest<CalculatorCubit, CalculatorState>(
       'clear() resets expressionRoot to PlaceholderNode',
